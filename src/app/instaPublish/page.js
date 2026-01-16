@@ -5,9 +5,27 @@ import { useRouter } from 'next/navigation';
 
 export default function InstaPublish() {
   const router = useRouter();
-  const [mediaUrl, setMediaUrl] = useState('');
+
+  // Array to support carousel
+  const [mediaUrls, setMediaUrls] = useState(['']);
   const [caption, setCaption] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const isCarousel = mediaUrls.filter(Boolean).length > 1;
+
+  const handleAddField = () => {
+    if (mediaUrls.length >= 10) {
+      alert('Instagram allows max 10 images');
+      return;
+    }
+    setMediaUrls([...mediaUrls, '']);
+  };
+
+  const handleChange = (index, value) => {
+    const updated = [...mediaUrls];
+    updated[index] = value;
+    setMediaUrls(updated);
+  };
 
   const handlePublish = async () => {
     const token = localStorage.getItem('token');
@@ -16,31 +34,37 @@ export default function InstaPublish() {
       return;
     }
 
-    if (!mediaUrl) {
-      alert('Media URL required');
+    const cleanedUrls = mediaUrls.filter(Boolean);
+
+    if (!cleanedUrls.length) {
+      alert('At least one media URL is required');
+      return;
+    }
+
+    if (cleanedUrls.length === 1) {
+      // single image → string
+    } else if (cleanedUrls.length < 2) {
+      alert('Carousel requires at least 2 images');
       return;
     }
 
     setLoading(true);
 
     try {
-      const res = await fetch(
-        'http://localhost:8080/posts',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            mediaUrl, // STRING → single image
-            caption,
-          }),
-        }
-      );
+      const res = await fetch('http://localhost:8080/posts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          caption,
+          mediaUrl:
+            cleanedUrls.length === 1 ? cleanedUrls[0] : cleanedUrls,
+        }),
+      });
 
       const data = await res.json();
-
       if (!res.ok) {
         alert(data.error || 'Create post failed');
         return;
@@ -58,7 +82,6 @@ export default function InstaPublish() {
       );
 
       const publishData = await publishRes.json();
-
       if (!publishRes.ok) {
         alert(publishData.error || 'Publish failed');
         return;
@@ -80,22 +103,28 @@ export default function InstaPublish() {
           Publish to Instagram
         </h1>
 
-        <label className="block mb-2 text-sm font-medium">
-          Image URL (JPEG, public)
-        </label>
-        <input
-          value={mediaUrl}
-          onChange={(e) => setMediaUrl(e.target.value)}
-          placeholder="https://example.com/image.jpg"
-          className="w-full border p-2 rounded mb-4"
-        />
+        {mediaUrls.map((url, i) => (
+          <input
+            key={i}
+            value={url}
+            onChange={(e) => handleChange(i, e.target.value)}
+            placeholder={`Image URL ${i + 1}`}
+            className="w-full border p-2 rounded mb-3"
+          />
+        ))}
 
-        <label className="block mb-2 text-sm font-medium">
-          Caption
-        </label>
+        <button
+          type="button"
+          onClick={handleAddField}
+          className="text-sm text-purple-600 mb-4"
+        >
+          + Add another image (carousel)
+        </button>
+
         <textarea
           value={caption}
           onChange={(e) => setCaption(e.target.value)}
+          placeholder="Caption"
           className="w-full border p-2 rounded mb-4"
           rows={3}
         />
@@ -105,7 +134,11 @@ export default function InstaPublish() {
           disabled={loading}
           className="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700"
         >
-          {loading ? 'Publishing…' : 'Publish Now'}
+          {loading
+            ? 'Publishing…'
+            : isCarousel
+            ? 'Publish Carousel'
+            : 'Publish Image'}
         </button>
       </div>
     </div>
