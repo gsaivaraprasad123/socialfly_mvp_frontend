@@ -12,6 +12,11 @@ export default function InstaPublish() {
   const [altText, setAltText] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // ⏰ Scheduling
+  const [schedule, setSchedule] = useState(false);
+  const [publishDate, setPublishDate] = useState('');
+  const [publishTime, setPublishTime] = useState('');
+
   const updateUrl = (index, value) => {
     const updated = [...mediaUrls];
     updated[index] = value;
@@ -26,8 +31,19 @@ export default function InstaPublish() {
     const token = localStorage.getItem('token');
     if (!token) return alert('Login required');
 
-    if (!mediaUrls.filter(Boolean).length) {
+    const cleanedUrls = mediaUrls.filter(Boolean);
+    if (!cleanedUrls.length) {
       return alert('At least one media URL required');
+    }
+
+    // ⏰ Build publishAt if scheduled
+    let publishAt = null;
+    if (schedule) {
+      if (!publishDate || !publishTime) {
+        return alert('Select both date and time');
+      }
+
+      publishAt = new Date(`${publishDate}T${publishTime}`).toISOString();
     }
 
     setLoading(true);
@@ -41,27 +57,31 @@ export default function InstaPublish() {
         },
         body: JSON.stringify({
           mediaType,
-          mediaUrls: mediaUrls.filter(Boolean),
+          mediaUrls: cleanedUrls,
           caption,
           altText: mediaType === 'IMAGE' ? altText : null,
+          publishAt, // ✅ key addition
         }),
       });
 
       const data = await res.json();
       if (!res.ok) return alert(data.error);
 
-      const publishRes = await fetch(
-        `http://localhost:8080/posts/${data.post.id}/publish`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      // Publish immediately only if NOT scheduled
+      if (!schedule) {
+        const publishRes = await fetch(
+          `http://localhost:8080/posts/${data.post.id}/publish`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
 
-      const publishData = await publishRes.json();
-      if (!publishRes.ok) return alert(publishData.error);
+        const publishData = await publishRes.json();
+        if (!publishRes.ok) return alert(publishData.error);
+      }
 
-      alert('✅ Published successfully');
+      alert(schedule ? '⏰ Post scheduled successfully' : '✅ Published successfully');
       router.push('/dashboard');
     } catch {
       alert('Network error');
@@ -128,12 +148,45 @@ export default function InstaPublish() {
         />
       )}
 
+      {/* ⏰ Scheduling */}
+      <div className="border rounded p-3 mb-4">
+        <label className="flex items-center gap-2 mb-2">
+          <input
+            type="checkbox"
+            checked={schedule}
+            onChange={(e) => setSchedule(e.target.checked)}
+          />
+          Schedule for later
+        </label>
+
+        {schedule && (
+          <div className="flex gap-2">
+            <input
+              type="date"
+              value={publishDate}
+              onChange={(e) => setPublishDate(e.target.value)}
+              className="border p-2 flex-1"
+            />
+            <input
+              type="time"
+              value={publishTime}
+              onChange={(e) => setPublishTime(e.target.value)}
+              className="border p-2 flex-1"
+            />
+          </div>
+        )}
+      </div>
+
       <button
         onClick={handlePublish}
         disabled={loading}
         className="bg-purple-600 text-white w-full py-2 rounded"
       >
-        {loading ? 'Publishing…' : 'Publish'}
+        {loading
+          ? 'Processing…'
+          : schedule
+          ? 'Schedule Post'
+          : 'Publish Now'}
       </button>
     </div>
   );
